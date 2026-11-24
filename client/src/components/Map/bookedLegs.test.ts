@@ -6,6 +6,9 @@ import { bookedLegsForDay } from './bookedLegs';
 // Every station below sits on one meridian, whole degrees of latitude apart, and a
 // degree is 111 km. The expected distances can be checked by eye.
 const km = (metres: number) => Math.round(metres / 1000);
+// The shape a transit leg is stored with: a Google-encoded polyline, precision 6. This
+// one runs 0°N → 1°N → 1.5°N, so it is 167 km long between ends 111 km apart.
+const LEG_SHAPE = '??_c`|@?_qo]?';
 
 const DAYS = [1, 2, 3].map((n) => buildDay({ id: n, day_number: n }));
 const NO_ASSIGNMENTS: AssignmentsMap = {};
@@ -128,5 +131,43 @@ describe('bookedLegsForDay', () => {
     const stop = buildAssignment({ id: 42, day_id: 1, order_index: 0, place: buildPlace({ lat: 0, lng: 0 }) });
 
     expect(bookedLegsForDay(1, input([booking({ assignment_id: 42 })], { '1': [stop] }))).toEqual([]);
+  });
+
+  it('FE-MAP-BOOKED-010: measures a transit journey along the shape it draws', () => {
+    // A journey from the transit search stores each leg as an encoded polyline, and the
+    // map draws it. The line bends where the straight hop between stations does not.
+    const journey = booking({
+      type: 'transit',
+      metadata: { transit: { legs: [{ geometry: LEG_SHAPE, geometry_precision: 6 }] } },
+    });
+
+    expect(km(bookedLegsForDay(1, input([journey]))[0].distance)).toBe(167);
+  });
+
+  it('FE-MAP-BOOKED-011: prefers the distance the provider measured', () => {
+    // The provider reports the metres of every leg. A shape is only as fine as it was
+    // drawn, and the stations are a straight line, so its figure wins over both.
+    const measured = booking({
+      type: 'transit',
+      metadata: { transit: { legs: [{ distance: 300_000, geometry: LEG_SHAPE, geometry_precision: 6 }] } },
+    });
+
+    expect(km(bookedLegsForDay(1, input([measured]))[0].distance)).toBe(300);
+  });
+
+  it('FE-MAP-BOOKED-012: falls back to the stations for a leg that has neither', () => {
+    // 167 km of drawn track, then the two degrees between the last two stations. A leg
+    // saved before the shapes were stored would otherwise count as nothing.
+    const mixed = booking({
+      type: 'transit',
+      endpoints: [station(0, 'from', 0), station(1, 'stop', 1), station(3, 'to', 2)],
+      metadata: {
+        transit: {
+          legs: [{ mode: 'RAIL', geometry: LEG_SHAPE, geometry_precision: 6 }, { mode: 'RAIL' }],
+        },
+      },
+    });
+
+    expect(km(bookedLegsForDay(1, input([mixed]))[0].distance)).toBe(389);
   });
 });

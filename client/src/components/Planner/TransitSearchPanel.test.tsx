@@ -157,6 +157,9 @@ describe('TransitSearchPanel', () => {
     expect(payload.metadata.transit.provider).toBe('transitous')
     expect(payload.metadata.transit.legs).toHaveLength(2)
     expect(payload.metadata.transit.legs[1]).toMatchObject({ mode: 'SUBWAY', line: 'U2', line_color: '#FF3300', headsign: 'Ruhleben' })
+    // The metres the provider measured are kept. The trip's distance reads them back off
+    // the booking, and nothing else stored on it follows the track.
+    expect(payload.metadata.transit.legs.map((l: { distance: number | null }) => l.distance)).toEqual([300, null])
   })
 
   it('FE-PLANNER-TRANSIT-003b: routes Google answered name Google Maps and are saved as Google’s (#2850)', async () => {

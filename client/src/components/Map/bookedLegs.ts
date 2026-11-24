@@ -8,12 +8,13 @@ import {
 import { orderedEndpoints } from '../../utils/flightLegs';
 import { haversineKm } from '../../utils/geo';
 import { TRANSPORT_TYPES, type DayRouteInputs } from './dayRoutePlan';
+import { transitLegDistances } from './transitGeometry';
 
 /** A stretch of a day that a booking covers, and how long it is. */
 export interface BookedLeg {
   /** `booking:<type>`, such as `booking:train`. Not a routing profile: no road is asked for. */
   mode: string;
-  /** Metres between the stations of the booking. */
+  /** Metres: what the provider measured, what the booking draws, or between its stations. */
   distance: number;
 }
 
@@ -25,6 +26,7 @@ type DayBooking = {
   day_id?: number | null;
   end_day_id?: number | null;
   endpoints?: ReservationEndpoint[];
+  metadata?: unknown;
   /** Set by the day plan when it splits a multi-leg booking into one entry per leg. */
   __leg?: { index: number; total: number };
 };
@@ -67,15 +69,40 @@ function pathMetres(points: readonly Coords[]): number {
 }
 
 /**
+ * How far a transit journey runs, leg by leg.
+ *
+ * A journey stores one station more than it has ridden legs: the origin, every
+ * transfer, the destination. Leg `i` therefore runs from stop `i` to stop `i + 1` and
+ * is at least the straight line between the two. Each leg is floored that way on its
+ * own, because measured over the whole journey a leg without a figure of its own
+ * disappeared behind the legs that have one.
+ */
+function transitJourneyMetres(r: DayBooking, stops: readonly Coords[]): number {
+  const legs = transitLegDistances(r);
+  const aligned = stops.length === legs.filter((leg) => !leg.walk).length + 1;
+  let metres = 0;
+  let i = 0;
+  for (const leg of legs) {
+    if (leg.walk) {
+      metres += leg.metres ?? 0;
+      continue;
+    }
+    metres += Math.max(leg.metres ?? 0, aligned ? pathMetres([stops[i], stops[i + 1]]) : 0);
+    i++;
+  }
+  return metres;
+}
+
+/**
  * How far one booking carries the traveller on this day, in metres.
  *
  * A car or a bike the traveller drives counts only the hop of this day. On the days a
  * rental is picked up or dropped off, both ends of that hop are the same point, so it
  * adds nothing: those days are the stops, and the roads between them are routed.
  *
- * Everything else is ridden and counts once, on the day it departs, through every
- * station on the way. Measured straight between the stations, which is short of the
- * rails or the road the vehicle really took.
+ * Everything else is ridden and counts once, on the day it departs. A transit journey
+ * is measured by what its provider reported. Any other booking is measured straight
+ * between its stations, which is all such a booking carries and is short of the track.
  */
 function bookingDistanceOnDay(r: DayBooking, dayId: number): number {
   if (isSelfDrivenTransport(r)) {
@@ -84,7 +111,8 @@ function bookingDistanceOnDay(r: DayBooking, dayId: number): number {
   }
   const phase = getSpanPhase(r, dayId);
   if (phase !== 'single' && phase !== 'start') return 0;
-  return pathMetres(bookingStations(r));
+  const stops = bookingStations(r);
+  return Math.max(pathMetres(stops), transitJourneyMetres(r, stops));
 }
 
 /**

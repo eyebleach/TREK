@@ -638,6 +638,9 @@ export default function TransitSearchPanel({ day, days, places, accommodations =
               headsign: l.headsign,
               agency: l.agency,
               duration: l.duration,
+              // The metres the provider measured along the leg. The stations only give a
+              // straight line between them, so this is the one figure that follows the track.
+              distance: l.distance,
               stops: l.intermediateStops,
               from: { name: l.from.name, time: stopTime(l.from) ? timeHHmmInTz(stopTime(l.from)!, tzAt(l.from.lat, l.from.lng)) : null, track: l.from.track },
               to: { name: l.to.name, time: stopTime(l.to) ? timeHHmmInTz(stopTime(l.to)!, tzAt(l.to.lat, l.to.lng)) : null, track: l.to.track },

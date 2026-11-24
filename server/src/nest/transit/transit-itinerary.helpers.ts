@@ -294,6 +294,9 @@ export function buildTransitReservationParts(
           headsign: leg.headsign,
           agency: leg.agency,
           duration: leg.duration,
+          // The metres the provider measured along the leg. Without it a journey is measured
+          // between its stations, which is shorter than the track it ran on.
+          distance: leg.distance,
           stops: leg.intermediateStops,
           from: {
             name: leg.from.name,
