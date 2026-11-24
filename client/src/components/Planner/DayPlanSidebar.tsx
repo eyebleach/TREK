@@ -72,7 +72,7 @@ import { resolveLegMode } from './legMode'
 import { useLegModeActions } from './useLegModeActions'
 import { dayExportStops, fillAroundLocked } from './dayRoute'
 import { projectDayItinerary, projectedById, type TourStageStops } from '../Map/dayTourProjection'
-import type { DayRoutePoint } from '../Map/dayRoutePlan'
+import { dayHasRoute, type DayRoutePoint } from '../Map/dayRoutePlan'
 import { usePluginDaySchedule, usePluginDayTints, dayTintBackground, dayTinted, PluginDayScheduleRow, formatScheduleMinutes } from '../Plugins/PluginDaySchedule'
 import { MobileAddPlaceButton } from './DayPlanSidebarMobileAddPlaceButton'
 import { DayPlanSidebarToolbar } from './DayPlanSidebarToolbar'
@@ -557,6 +557,13 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   // getMergedItems is redefined each render but captures assignments/dayNotes/reservations/days via closure
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, assignments, dayNotes, reservations, transportPosVersion, mirrorServiceStops])
+
+  // The days the map has a road for. Asking the builder keeps this in step with what
+  // is drawn, so a day with a route always has the tools to change it.
+  const daysWithRoutes = useMemo(() => {
+    const input = { days, assignments, reservations, accommodations, optimizeFromAccommodation, toursEnabled, places, tourStageStops: props.tourStageStops }
+    return new Set(days.filter(day => dayHasRoute(day.id, input)).map(day => day.id))
+  }, [days, assignments, reservations, accommodations, optimizeFromAccommodation, toursEnabled, places, props.tourStageStops])
 
   // Days whose inline route legs should be computed & shown. Desktop: the selected
   // day while the Route toggle is on. Mobile: each expanded day the user tapped
@@ -1122,6 +1129,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     },
     expandedDays,
     setExpandedDays,
+    daysWithRoutes,
     routeLegs,
     hotelLegs,
     draggingId,
@@ -1291,6 +1299,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
     notes,
     expandedDays,
     setExpandedDays,
+    daysWithRoutes,
     routeLegs,
     hotelLegs,
     draggingId,
@@ -1505,7 +1514,10 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
             (transferMorning.place_lat !== transferEvening.place_lat || transferMorning.place_lng !== transferEvening.place_lng) &&
             (dayCarriers.length === 0 || dayHasLocatedCarrier)
           )
-          const routeToolsRoutable = da.length >= 2 || (loc != null && hasRouteBookend) || hasHotelTransfer
+          // ...and any day with a road, however few stops it holds. One stop between two
+          // bookings is a road the map draws, so the day needs its Route toggle and its
+          // travel mode like any other.
+          const routeToolsRoutable = da.length >= 2 || (loc != null && hasRouteBookend) || hasHotelTransfer || daysWithRoutes.has(day.id)
           const showRouteTools = (isSelected || (showRouteToolsWhenExpanded && isExpanded)) && routeToolsRoutable
           // Built once, for the day the tools show on: the day's located stops in planned
           // order, bookended the way the drawn route is (#1372, #1465), with the same

@@ -4172,6 +4172,34 @@ describe('DayPlanSidebar', () => {
       expect(vi.mocked(generateGoogleMapsUrl)).toHaveBeenCalledWith([{ lat: 53.541, lng: 9.984, name: 'Elbphilharmonie' }])
       openSpy.mockRestore()
     })
+
+    it('FE-PLANNER-DAYPLAN-225: one stop between two trains is a day with route tools', () => {
+      // Off one train, out to a stop, on to the next. The map draws that road, but
+      // the tools used to need two stops, so nobody could change its travel mode.
+      const day = buildDay({ id: 20, date: '2025-11-06', title: 'Stockholm' })
+      const station = (role: 'from' | 'to', name: string, lat: number, lng: number) =>
+        ({ role, sequence: role === 'from' ? 0 : 1, name, code: null, lat, lng, timezone: null, local_date: null, local_time: null })
+      const arrival = buildReservation({
+        id: 81, type: 'train', title: 'Malmö C → Stockholm C', day_id: 20, end_day_id: 20,
+        reservation_time: '2025-11-06T08:17:00', reservation_end_time: '2025-11-06T13:18:00',
+        endpoints: [station('from', 'Malmö C', 55.609, 13.0), station('to', 'Stockholm C', 59.33, 18.058)],
+      })
+      const onwards = buildReservation({
+        id: 82, type: 'train', title: 'Stockholm C → Luleå', day_id: 20, end_day_id: 20,
+        reservation_time: '2025-11-06T18:07:00', reservation_end_time: '2025-11-06T23:50:00',
+        endpoints: [station('from', 'Stockholm C', 59.33, 18.058), station('to', 'Luleå', 65.584, 22.156)],
+      })
+      const assignments = {
+        '20': [buildAssignment({ id: 9, day_id: 20, order_index: 0, place: buildPlace({ id: 9, name: 'Naturkompaniet', lat: 59.335, lng: 18.064, place_time: '15:00' }) })],
+      }
+
+      render(<DayPlanSidebar {...makeDefaultProps({
+        days: [day], assignments, reservations: [arrival, onwards], selectedDayId: 20,
+      })} />)
+
+      expect(screen.getByRole('button', { name: 'Route' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Walking' })).toBeInTheDocument()
+    })
   })
 
   it('FE-PLANNER-DAYPLAN-169: picking a whole-day travel mode persists it and redraws the map', async () => {

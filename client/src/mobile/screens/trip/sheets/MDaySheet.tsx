@@ -13,6 +13,7 @@ import { dayBookings, stayDayLabel, toDisplayTemp } from '../../../../components
 import { RES_ICONS, getNoteIcon } from '../../../../components/Planner/DayPlanSidebar.constants'
 import { getDayBookendHotels, isDayInAccommodationRange } from '../../../../utils/dayOrder'
 import { getTransportForDay, hasCarrierEndpointOnDay, pinnedAwayIn, stopDayIds } from '../../../../utils/dayMerge'
+import { dayHasRoute } from '../../../../components/Map/dayRoutePlan'
 import { splitReservationDateTime } from '../../../../utils/formatters'
 import { dayCoMapsUrl, dayGoogleMapsUrl, optimizeDayOrder } from '../../../../components/Planner/dayRoute'
 import GoogleMapsIcon from '../../../../components/shared/GoogleMapsIcon'
@@ -98,7 +99,34 @@ export default function MDaySheet({ planner, shell }: MTripSheetsProps) {
   const bookends = day && optimizeFromAccommodation !== false
     ? getDayBookendHotels(day, planner.days, planner.tripAccommodations)
     : null
-  const routable = routedStops.length >= 2 || (routedStops.length >= 1 && !!bookends?.morning)
+  // ...and any day with a road, as on the desktop. One stop between two bookings is a
+  // road the map draws, so the day needs its Route toggle and its travel mode.
+  const hasRoute = useMemo(
+    () =>
+      !!day &&
+      dayHasRoute(day.id, {
+        days: planner.days,
+        assignments: planner.assignments,
+        reservations: planner.reservations,
+        accommodations: planner.tripAccommodations,
+        optimizeFromAccommodation,
+        toursEnabled: planner.toursEnabled,
+        places: planner.places,
+        tourStageStops: planner.tourStageStops,
+      }),
+    [
+      day,
+      planner.days,
+      planner.assignments,
+      planner.reservations,
+      planner.tripAccommodations,
+      optimizeFromAccommodation,
+      planner.toursEnabled,
+      planner.places,
+      planner.tourStageStops,
+    ],
+  )
+  const routable = routedStops.length >= 2 || (routedStops.length >= 1 && !!bookends?.morning) || hasRoute
   const routeActive = planner.routeShown && planner.selectedDayId === day?.id
 
   const toggleRoute = () => {

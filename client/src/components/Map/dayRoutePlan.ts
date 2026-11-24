@@ -236,3 +236,14 @@ export function buildDayRouteRuns(dayId: number, input: DayRouteInputs): DayRout
 
   return runsWithHotel
 }
+
+/**
+ * Whether this day has any road to draw, answered by the builder above.
+ *
+ * Counting stops instead misses a day whose single stop sits between two bookings: a
+ * train arrives, you go somewhere, another train leaves. The map draws that road, so
+ * the day plan has to offer the Route toggle and the travel mode for it.
+ */
+export function dayHasRoute(dayId: number, input: DayRouteInputs): boolean {
+  return buildDayRouteRuns(dayId, input).length > 0
+}
