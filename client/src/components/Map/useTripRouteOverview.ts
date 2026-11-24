@@ -77,9 +77,9 @@ export function useTripRouteOverview(
   // Only geometry and mode decide whether legs have to be fetched again: renaming a
   // place or editing its notes must not fire a routing round.
   const planKey = useMemo(
-    () => plan.map(({ day, runs, tourLines }) => `${day.id}@${day.default_transport_mode ?? ''}:${runs
+    () => plan.map(({ day, runs, tourLines, bookedLegs }) => `${day.id}@${day.default_transport_mode ?? ''}:${runs
       .map(chunks => chunks.map(c => `${c.mode}>${c.waypoints.map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|')}`).join('+'))
-      .join('/')}:tours=${JSON.stringify(tourLines ?? [])}`).join(';'),
+      .join('/')}:tours=${JSON.stringify(tourLines ?? [])}:booked=${bookedLegs.map(leg => `${leg.mode}@${Math.round(leg.distance)}`).join('+')}`).join(';'),
     [plan],
   )
 

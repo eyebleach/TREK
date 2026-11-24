@@ -92,6 +92,15 @@ export function isCarrierTransport(r: { type?: string | null }): boolean {
 const SELF_DRIVEN_TYPES = new Set(['car', 'bicycle'])
 
 /**
+ * Whether this booking is a vehicle the traveller drives rather than one they ride.
+ * The day's own route covers that driving, so code measuring how far a booking carries
+ * someone has to treat the two apart (see `bookedLegsForDay`).
+ */
+export function isSelfDrivenTransport(r: { type?: string | null }): boolean {
+  return !!r.type && SELF_DRIVEN_TYPES.has(r.type)
+}
+
+/**
  * The route waypoints a transport contributes on a given day, respecting multi-day spans.
  * A reservation whose span covers several days is routed to its departure on its first day
  * and from its arrival on its last; a rental the traveller drives (SELF_DRIVEN_TYPES) is

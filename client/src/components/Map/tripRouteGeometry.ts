@@ -3,6 +3,7 @@ import { calculateRouteWithRetries, sleepUnlessAborted as sleep } from './routeR
 import { buildDayRouteRuns, type DayRouteInputs, type DayRoutePoint } from './dayRoutePlan'
 import { dayViaLookup, foldViaLegs, threadVias, viasOnDayLeg, type DayViaLookup } from '../../utils/dayRouteVias'
 import { projectDayItinerary } from './dayTourProjection'
+import { bookedLegsForDay, type BookedLeg } from './bookedLegs'
 import { resolveLegMode } from '../Planner/legMode'
 import { dayColor } from '../Roadtrip/dayColors'
 import type { RoadtripVia } from '@trek/shared'
@@ -22,10 +23,11 @@ export interface TripOverviewDay {
   /** Saved Tours are not routed legs and keep their own map style. */
   tourLines?: [number, number][][]
   segments: RouteSegment[]
-  /** Metres and seconds, summed over the day's legs. */
+  /** What the day's bookings cover: a train, a flight, a hire car, and how far each runs. */
+  bookedLegs?: BookedLeg[]
   distance: number
   duration: number
-  /** The modes this day is actually travelled in, first use first. */
+  /** The modes this day is travelled in, first use first, bookings last. */
   modes: string[]
   /**
    * Legs drawn as a straight line because the router gave no road for them: not asked
@@ -63,7 +65,7 @@ export interface TripRouteInputs extends DayRouteInputs {
 }
 
 /** A day reduced to the routing requests it needs, in the order they draw. */
-export interface TripRoutePlanDay { day: Day; runs: Chunk[][]; tourLines?: [number, number][][] }
+export interface TripRoutePlanDay { day: Day; runs: Chunk[][]; tourLines?: [number, number][][]; bookedLegs: BookedLeg[] }
 
 type Answer = { coordinates: [number, number][]; legs: RouteSegment[] } | null
 /** Every leg's answer so far, indexed like the plan: day, run, chunk. */
@@ -109,12 +111,14 @@ export function planTripRoute(input: TripRouteInputs, profile: RouteProfileKey):
         input.places,
         input.tourStageStops,
       ).flatMap(item => item.kind === 'tour' && item.geometry.length >= 2 ? [item.geometry] : []),
+      bookedLegs: bookedLegsForDay(day.id, input),
     }))
-    .filter(entry => entry.runs.length > 0 || entry.tourLines.length > 0)
-    .map(({ day, runs, tourLines }) => ({
+    .filter(entry => entry.runs.length > 0 || entry.tourLines.length > 0 || entry.bookedLegs.length > 0)
+    .map(({ day, runs, tourLines, bookedLegs }) => ({
       day,
       runs: runs.map(run => chunkRun(run, day.default_transport_mode || profile, day.id, viaLookup)),
       tourLines,
+      bookedLegs,
     }))
 }
 
@@ -124,7 +128,7 @@ export const emptyAnswers = (plan: TripRoutePlanDay[]): Answer[][][] =>
 
 /** Stitch the routed answers back onto the plan, in the order the days are travelled. */
 export function assembleTripRoute(plan: TripRoutePlanDay[], routed: Answer[][][]): TripOverviewDay[] {
-  return plan.map(({ day, runs, tourLines }, d) => {
+  return plan.map(({ day, runs, tourLines, bookedLegs }, d) => {
     const lines: [number, number][][] = []
     const segments: RouteSegment[] = []
     let unroutedLegs = 0
@@ -147,6 +151,8 @@ export function assembleTripRoute(plan: TripRoutePlanDay[], routed: Answer[][][]
     })
     const modes: string[] = []
     for (const chunk of runs.flat()) if (!modes.includes(chunk.mode)) modes.push(chunk.mode)
+    // After the driven modes, so the row reads in the order the day is travelled.
+    for (const leg of bookedLegs) if (!modes.includes(leg.mode)) modes.push(leg.mode)
     return {
       dayId: day.id,
       dayNumber: day.day_number ?? 0,
@@ -156,7 +162,8 @@ export function assembleTripRoute(plan: TripRoutePlanDay[], routed: Answer[][][]
       lines,
       tourLines,
       segments,
-      distance: segments.reduce((sum, s) => sum + s.distance, 0),
+      bookedLegs,
+      distance: segments.reduce((sum, s) => sum + s.distance, 0) + bookedLegs.reduce((sum, leg) => sum + leg.distance, 0),
       duration: segments.reduce((sum, s) => sum + s.duration, 0),
       modes,
       unroutedLegs,

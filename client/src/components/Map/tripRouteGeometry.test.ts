@@ -284,4 +284,44 @@ describe('tripRouteGeometry', () => {
     expect(summary.days[0].distance).toBe(20000)
     expect(summary.days[1].distance).toBe(10000)
   })
+
+  // The train below runs one degree of latitude north, which is 111 km. Each day of
+  // the mocked trip routes 10 km of road on top.
+  const km = (metres: number) => Math.round(metres / 1000)
+  const station = (lat: number, role: 'from' | 'to', sequence: number) => ({
+    role, sequence, name: role, code: null, lat, lng: 0, timezone: null, local_time: null, local_date: null,
+  })
+  const train = (dayId: number) => ({
+    id: 90, trip_id: 1, type: 'train', title: 'Train', day_id: dayId, end_day_id: dayId,
+    reservation_time: null, reservation_end_time: null,
+    endpoints: [station(0, 'from', 0), station(1, 'to', 1)],
+  } as unknown as Reservation)
+
+  it('FE-MAP-TRG-016: counts a booked train in the day and in the trip total', async () => {
+    // No router draws a railway, so the day plan breaks the drive at the booking and
+    // the total used to break with it. A day of travel then came to the walk to the
+    // station.
+    const summary = await routeTrip({ ...input, reservations: [train(1)] }, { profile: 'driving', tripId: 7 })
+
+    expect(km(summary.days[0].distance)).toBe(121)
+    expect(summary.days[0].modes).toEqual(['driving', 'booking:train'])
+    expect(summary.days[1].distance).toBe(10000)
+    expect(km(summary.totalDistance)).toBe(131)
+  })
+
+  it('FE-MAP-TRG-017: lists a day that is nothing but a train ride', async () => {
+    // Day 2 has no stops, so it draws no line of its own. It is still the day the trip
+    // covers the most ground on.
+    const summary = await routeTrip(
+      { ...input, assignments: { '1': ASSIGNMENTS['1'] }, reservations: [train(2)] },
+      { profile: 'driving', tripId: 7 },
+    )
+
+    expect(summary.days.map(d => d.dayId)).toEqual([1, 2])
+    expect(summary.days[1].lines).toEqual([])
+    expect(summary.days[1].modes).toEqual(['booking:train'])
+    expect(km(summary.days[1].distance)).toBe(111)
+    // No road was asked for, so nothing went unrouted and no warning is raised.
+    expect(summary.days[1].unroutedLegs).toBe(0)
+  })
 })

@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Bike, Car, Footprints, Zap, type LucideIcon } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import { usePluginStore } from '../../store/pluginStore'
+import { TRANSPORT_META, type TransportType } from '../Map/transportHops'
 
 export interface RouteModeOption {
   key: string
@@ -13,6 +14,9 @@ export function routeModeIcon(mode: string | null | undefined): LucideIcon {
   if (mode === 'walking') return Footprints
   if (mode === 'cycling') return Bike
   if (mode?.startsWith('plugin:')) return Zap
+  // A booking is no routing profile. It names its own mode, 'booking:train', and keeps
+  // the icon that booking type has on the map.
+  if (mode?.startsWith('booking:')) return TRANSPORT_META[mode.slice(8) as TransportType]?.icon ?? Car
   return Car
 }
 
